@@ -1,5 +1,7 @@
 # Building nim-ts-mode
 
+These notes apply to legacy setups using tree-sitter.el. The current nim-ts-mode targets Emacs 29+ with built-in tree-sitter support and does not require nim-mode or doom themes.
+
 
 ## Getting nim tree-sitter grammar to work with tree-sitter.el Emacs MELPA package
 
