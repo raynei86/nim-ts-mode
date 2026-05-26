@@ -230,6 +230,7 @@
      ([
        "macro"
        "template"
+       "using"
        "const"
        "let"
        "var"
@@ -241,7 +242,9 @@
        "discard"
        "distinct"
        "do"
+       "end"
        "enum"
+       "interface"
        "mixin"
        "nil"
        "object"
@@ -266,6 +269,7 @@
        "or"
        "xor"
        "not"
+       "addr"
        "div"
        "mod"
        "shl"
@@ -282,7 +286,7 @@
 
      ;; true and false are missing as builtin constants and must be added in the parser lib
      ((identifier) @font-lock-constant-face
-      (:match "\\btrue\\b\\|\\bfalse\\b" @font-lock-constant-face))
+      (:match "\\_<\\(true\\|false\\)\\_>" @font-lock-constant-face))
 
      ([
        "return"
@@ -302,48 +306,63 @@
   )
 
 
-(defun nim-ts-mode-indent-line-simple ()
-  "Indent the current Nim code line as simple as it gets."
+(defun nim-ts-mode--strip-comment (line)
+  "Remove line comments from LINE."
+  (replace-regexp-in-string "#.*\\'" "" line))
+
+(defun nim-ts-mode--line-empty-p (line)
+  "Return non-nil if LINE is blank."
+  (string-match-p "\\`\\s-*\\'" line))
+
+(defun nim-ts-mode--line-content ()
+  "Return the current line without comments and trailing whitespace."
+  (string-trim-right
+   (nim-ts-mode--strip-comment
+    (buffer-substring-no-properties (line-beginning-position) (line-end-position)))))
+
+(defun nim-ts-mode--previous-nonblank-line ()
+  "Return cons of (indent . line) for previous nonblank line."
+  (save-excursion
+    (let ((found nil)
+          (indent 0)
+          (line ""))
+      (while (and (not found) (zerop (forward-line -1)))
+        (setq line (nim-ts-mode--line-content))
+        (unless (nim-ts-mode--line-empty-p line)
+          (setq found t)
+          (setq indent (current-indentation))))
+      (when found
+        (cons indent line)))))
+
+(defun nim-ts-mode--line-opens-block-p (line)
+  "Return non-nil if LINE opens a new block."
+  (when line
+    (or (string-match-p "[:=]\\s-*\\'" line)
+        (string-match-p "\\`\\s-*\\(case\\|type\\|var\\|let\\|const\\)\\_>\\s-*\\'" line)
+        (string-match-p "\\_<\\(object\\|enum\\|tuple\\|concept\\|interface\\)\\_>\\s-*\\'" line))))
+
+(defun nim-ts-mode--line-dedent-p (line)
+  "Return non-nil if LINE should dedent."
+  (when line
+    (string-match-p "\\`\\s-*\\(elif\\|else\\|except\\|finally\\|of\\|end\\)\\_>" line)))
+
+(defun nim-ts-mode-indent-line ()
+  "Indent current line as Nim code."
   (interactive)
-  (let ((two-lines-empty (save-excursion
-                           (and
-                            (progn
-                              (beginning-of-line)
-                              (looking-at "[[:blank:]]*$"))
-                            (progn
-                              (forward-line -1)
-                              (looking-at "[[:blank:]]*$")))))
-        (indent-further (save-excursion
-                         (backward-word)
-                         (end-of-line)
-                         (re-search-backward "[:=]" (line-beginning-position) t)
-                         (looking-at "[:=][[:blank:]]*$")
-                         )))
-    (cond
-     ;; if our current line and the previous line are empty,
-     ;; we want to go back to the last indentation level
-     ((and (eq this-command 'indent-for-tab-command) two-lines-empty)
-      (let ((prev-indent (save-excursion
-                                (forward-line -2)
-                                (current-indentation))))
-        (indent-line-to prev-indent)))
-
-     ((eq this-command 'indent-for-tab-command)
-      (indent-line-to (+ (current-indentation) nim-ts-mode-indent-level)))
-
-     ((and indent-further (eq this-command 'newline-and-indent))
-      (let ((prev-indent (save-excursion
-                           (backward-word)
-                           (current-indentation))))
-        (indent-line-to (+ prev-indent nim-ts-mode-indent-level))))
-
-     (t
-      (let ((prev-indent
-             (save-excursion
-               (forward-line -1)
-               (beginning-of-line)
-               (current-indentation))))
-        (indent-line-to prev-indent))))))
+  (let* ((current-line (nim-ts-mode--line-content))
+         (previous (nim-ts-mode--previous-nonblank-line))
+         (prev-indent (if previous (car previous) 0))
+         (prev-line (if previous (cdr previous) ""))
+         (dedent (nim-ts-mode--line-dedent-p current-line))
+         (indent (cond
+                  (dedent (max 0 (- prev-indent nim-ts-mode-indent-level)))
+                  ((nim-ts-mode--line-opens-block-p prev-line)
+                   (+ prev-indent nim-ts-mode-indent-level))
+                  (t prev-indent)))
+         (offset (- (current-column) (current-indentation))))
+    (indent-line-to indent)
+    (when (> offset 0)
+      (move-to-column (+ indent offset)))))
 
 
 ;;;###autoload
@@ -358,8 +377,7 @@
   (setq-local comment-use-syntax t)
   (setq-local syntax-propertize-function nim-ts-mode--syntax-propertize-function)
 
-  ;; disable electric indent as long as tree-sitter indent is not working properly
-  (electric-indent-mode -1)
+  (electric-indent-mode 1)
 
   (if (treesit-ready-p 'nim)
       (progn
@@ -376,8 +394,7 @@
               (apply #'treesit-font-lock-rules
                      nim-ts-font-lock-rules))
 
-  ;; TODO make Indentation work with tree-sitter
-  (setq-local indent-line-function #'nim-ts-mode-indent-line-simple)
+  (setq-local indent-line-function #'nim-ts-mode-indent-line)
 
   (setq-local treesit-font-lock-feature-list
               '((comment keyword literal_comment)
