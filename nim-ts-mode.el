@@ -264,6 +264,19 @@
        "iterator"
        ] @font-lock-keyword-face)
 
+     (proc_declaration "proc" @font-lock-keyword-face)
+     (func_declaration "func" @font-lock-keyword-face)
+     (method_declaration "method" @font-lock-keyword-face)
+     (converter_declaration "converter" @font-lock-keyword-face)
+     (iterator_declaration "iterator" @font-lock-keyword-face)
+     (macro_declaration "macro" @font-lock-keyword-face)
+     (template_declaration "template" @font-lock-keyword-face)
+     (const_section "const" @font-lock-keyword-face)
+     (let_section "let" @font-lock-keyword-face)
+     (var_section "var" @font-lock-keyword-face)
+     (using_section "using" @font-lock-keyword-face)
+     (type_section "type" @font-lock-keyword-face)
+
      ([
        "and"
        "or"
@@ -287,6 +300,9 @@
      ;; true and false are missing as builtin constants and must be added in the parser lib
      ((identifier) @font-lock-constant-face
       (:match "\\_<\\(true\\|false\\)\\_>" @font-lock-constant-face))
+
+     ((identifier) @font-lock-keyword-face
+      (:match "\\_<\\(end\\|interface\\)\\_>" @font-lock-keyword-face))
 
      ([
        "return"
